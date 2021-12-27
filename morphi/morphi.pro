@@ -29,5 +29,6 @@ HEADERS += \
     permutation.h \
     priority_queue.h \
     proof.h \
+    tests.h \
     utility.h \
     vector.h
