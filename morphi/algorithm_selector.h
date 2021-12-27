@@ -98,7 +98,7 @@ public:
         if(m_options.proof_type == ProofType::PrunedTree) {
             solver.generateProof();
         }
-        else if(m_options.proof_type == ProofType::None){
+        //else if(m_options.proof_type == ProofType::None){
             if(m_options.relabel) {
                 for(size_t idx = 0; idx < m_vertices; idx++)
                     m_canon.set(idx, m_params.relabeling[m_canon[idx]]);
@@ -116,7 +116,7 @@ public:
                         std::cout << solver.graph.adjacent(m_canon.m_inverse[i], m_canon.m_inverse[j]);
                 std::cout << std::endl;
             }
-        }
+        //}
     }
 
     void run() {

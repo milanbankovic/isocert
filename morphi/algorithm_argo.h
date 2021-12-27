@@ -74,7 +74,7 @@ public:
         }
         proof.canonicalLeaf(max_node.stabilized, max_node.permutation.m_forward);
         proof.close();
-        std::cerr << "Proof size: " << statistics.proof_size << std::endl;
+        //std::cerr << "Proof size: " << statistics.proof_size << std::endl;
     }
 
     // returns whether the whole subtree has been pruned
@@ -164,14 +164,14 @@ public:
         else {
             solve(true, true);
         }
-        std::cerr << "Tree size: " << statistics.tree_size << std::endl;
+        /*std::cerr << "Tree size: " << statistics.tree_size << std::endl;
         std::cerr << "Bad nodes: " << statistics.bad_nodes << std::endl;
         std::cerr << "Aut size: " << automorphisms.m_elements << std::endl;
         std::cerr << "Orbit prunes: " << statistics.orbit_prunes << std::endl;
         std::cerr << "Max path nodes: " << statistics.max_nodes << std::endl;
         std::cerr << "Aut path nodes: " << statistics.aut_nodes << std::endl;
         std::cerr << "Max path length: " << max_node.invariants.m_size << std::endl;
-        std::cerr << "Fst path length: " << fst_node.invariants.m_size << std::endl;
+        std::cerr << "Fst path length: " << fst_node.invariants.m_size << std::endl;*/
         return max_node.permutation;
     }
 
@@ -938,7 +938,7 @@ public:
 
     Array<T> targetCell(const Coloring<T>& coloring, size_t level) {
         size_t cell_idx = 0;
-        size_t cell_end;
+        size_t cell_end = 0;
         while(cell_idx < coloring.size()) {
             cell_end = coloring.m_cell_end[cell_idx];
             while(cell_end < coloring.size() && coloring.m_cell_level[cell_end] > level)

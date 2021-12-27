@@ -21,13 +21,12 @@ enum ProofType {
 
 struct Options {
     bool relabel = false;
-    ProofType proof_type;
-    std::string proof_file = "/home/idrecun/repos/argonaut/graphs/proof";
+    ProofType proof_type = ProofType::None;
+    std::string proof_file = "proof.out";
     size_t aut_limit = 500;
 };
 
 struct ArgumentParser {
-
 
     ArgumentParser(size_t argc, char* argv[]) {
         parsed = true;
@@ -52,13 +51,20 @@ struct ArgumentParser {
                 }
                 mem_limit = std::stoull(argv[idx++]) * (1ull << 20);
             }
-            else if(arg == "-p") {
+            else if(arg == "-o") {
                 if(idx == argc) {
                     parsed = false;
                     break;
                 }
-                options.proof_type = ProofType::PrunedTree;
                 options.proof_file = std::string(argv[idx++]);
+            }
+            else if(arg == "-p")
+                options.proof_type = ProofType::PrunedTree;
+            else if(arg == "-d")
+                options.proof_type = ProofType::SearchTree;
+            else {
+                parsed = false;
+                break;
             }
         }
     }
