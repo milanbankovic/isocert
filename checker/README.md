@@ -1,6 +1,6 @@
 # Proof checker implementation
 
-# Introduction
+## Introduction
 
 The proof checker implementation consists of several files:
 
@@ -25,7 +25,7 @@ The proof checker implementation consists of several files:
   UNIX-compatible systems), for efficient reading of the certificate
   file.
 
-# Compiling the checker
+## Compiling the checker
 
 The checker is easily compiled by invoking:
 
@@ -42,7 +42,7 @@ in the appropriate way (i.e., by dropping the command line options
 -D_ENABLE_MMAP and/or -D_PREFIX_TREE). Note that C++17 (at least) is
 required in order to compile the code properly.
 
-# Using the checker
+## Using the checker
 
 The best way to learn how to use checker is to invoke it without any
 command line options:
