@@ -52,6 +52,8 @@ command line options:
 This will print a help message with invocation synopsis and usage
 examples:
 
+> usage: ./checker graph_file proof_file [-h | canon_graph_file | graph2_file proof2_file]
+>
 > Examples: 
 > 1) The command: 
 >    ./checker input_graph.in proof_file.in
