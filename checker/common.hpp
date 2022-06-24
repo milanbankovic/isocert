@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
 #include <iomanip>
 #include <random>
@@ -11,6 +12,13 @@
 #include <map>
 #include <unordered_set>
 #include <memory>
+#include <ctime>
+
+#ifndef NDEBUG
+#define DBG(X) X
+#else
+#define DBG(X)
+#endif
 
 using permutation = std::vector<unsigned>;
 
@@ -71,6 +79,7 @@ public:
 	  return false;
     return true;	
   }
+
   
   int compare_to(const graph & g) const
   {
@@ -86,55 +95,106 @@ public:
     return 0;	
   }
   
-  void out(std::ostream & ostr) const
+  unsigned num_edges() const
   {
-    ostr << "   ";
+    unsigned c = 0;
     for(unsigned i = 0; i < num_nodes(); i++)
-      ostr << std::setw(2) << i  << " ";
-    ostr << std::endl;
-    for(unsigned i = 0; i < num_nodes(); i++)
-      {
-	ostr << std::setw(2) << i << " ";
-	
-	for(unsigned j = 0; j < num_nodes(); j++)
-	  {
-	    ostr << std::setw(2) << _edges[i][j] << " ";	    
-	  }
-	ostr << std::endl;
-      }
+      for(unsigned j = 0; j < num_nodes(); j++)
+	if(edge_exists(i, j))
+	  c++;
+    return c;
   }
-
+  
+  void export_dimacs(std::ostream & ostr) const
+  {
+    ostr << "p edge " << num_nodes() << " " << num_edges() << std::endl;
+    for(unsigned i = 0; i < num_nodes(); i++)
+      for(unsigned j = 0; j < num_nodes(); j++)
+	if(edge_exists(i, j))
+	  ostr << "e " << i + 1 << " "  << j + 1 << std::endl;    
+  }
+  
   void in(std::istream & istr)
   {
-    std::string s, t;
-    unsigned n, m;
-    istr >> s >> t >> n >> m;
-    if(!istr || s != "p" || t != "edge")
+    std::string line;
+    unsigned n = 0, m = 0;
+    unsigned line_count = 0;
+    while(std::getline(istr, line))
       {
-	std::cerr << "error reading file" << std::endl;
-	exit(1);
-      }
-    reset(n);
-    for(unsigned k = 0; k < m; k++)
-      {
-	unsigned i,j;
-	istr >> s >> i >> j;
-	if(s != "e")
+	line_count++;
+	std::stringstream sstr(line);
+	std::string first_word;
+	sstr >> first_word;
+	if(!sstr)
 	  {
-	    std::cerr << "error reading file" << std::endl;
-	    exit(1);
+	    // Empty lines ignored
+	    continue;
+	  }       
+	else if(first_word == "c")
+	  {
+	    // Ignore comment lines
+	    continue;
 	  }
-	add_edge(i-1,j-1);
+	else if(first_word == "p")
+	  {
+	    std::string second_word;
+	    sstr >> second_word;
+	    if(!sstr || second_word != "edge")
+	      {
+		std::cerr << "error reading file (line " << line_count << "): 'edge' expected after 'p'" << std::endl;
+		exit(1);
+	      }
+	    
+	    sstr >> n >> m;
+	    if(!sstr)
+	      {
+		std::cerr << "error reading file (line " << line_count << "):  number of nodes or edges missing (or badly formatted)" << std::endl;
+		exit(1);
+	      }
+
+	    std::string rest;
+	    sstr >> rest;
+	    if(!rest.empty())
+	      {
+		std::cerr << "error reading file (line " << line_count << "): bad format (possibly some garbage after the number of edges)" << std::endl;
+		exit(1);
+	      }
+	    reset(n);	    
+	  }
+	else if(first_word == "e")
+	  {
+	    if(m == 0 || n == 0)
+	      {
+		std::cerr << "error reading file (line " << line_count << "): 'p edge n m' line missing" << std::endl;
+		exit(1);
+	      }
+	    
+	    unsigned i, j;
+	    sstr >> i >> j;
+	    if(!sstr)
+	      {
+		std::cerr << "error reading file (line " << line_count << "): edge vertices not given (or badly formatted)" << std::endl;
+		exit(1);
+	      }
+	    std::string rest;
+	    sstr >> rest;
+	    if(!rest.empty())
+	      {
+		std::cerr << "error reading file (line " << line_count << "): bad format (possibly some garbage after the edge vertices)" << std::endl;
+		exit(1);
+	      }
+
+	    add_edge(i-1,j-1);
+	  }
+	else
+	  {
+	    std::cerr << "error reading file (line " << line_count << "): unknown line type: " << first_word << std::endl;
+	    exit(1);
+	  }	
       }
   }
 };
 
-inline
-std::ostream & operator << (std::ostream & ostr, const graph & g)
-{
-  g.out(ostr);
-  return ostr;
-}
 
 inline
 std::istream & operator >> (std::istream & istr, graph & g)
@@ -158,6 +218,7 @@ hash32(T value)
   return value;
 }
 
+
 class coloring {
 private:
   std::vector<unsigned> _node_colors;
@@ -173,6 +234,7 @@ private:
   {
     return invariant + hash32(x) + 1;
   }
+
   
   void calculate_invariant(const graph & g)
   {
@@ -232,7 +294,6 @@ public:
       calculate_invariant(g);
   }
 
-  
   coloring(std::vector<std::vector<unsigned>> && cells, unsigned num_of_nodes, const graph & g, bool calculate = true)
     :_node_colors(num_of_nodes),
      _cells(std::move(cells)),
@@ -408,6 +469,7 @@ unsigned read_utf8(T & istr)
     }  
   return (unsigned)(-1);
 }
+
 
 enum class rule_type : unsigned {
   COLORING_AXIOM = 0,

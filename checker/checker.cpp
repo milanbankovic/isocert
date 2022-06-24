@@ -141,6 +141,10 @@ const std::vector<unsigned> & first_non_singleton(const coloring & c, unsigned &
   return dummy;
 }
 
+
+bool canonical_form_derived = false;
+graph * gcp = nullptr;
+
 class convert_to_sequence {
 private:
   enum class fact_type {
@@ -286,9 +290,13 @@ public:
   }
 
   
-  static std::vector<unsigned> && canonical()
+  static std::vector<unsigned> && canonical(const std::vector<unsigned> & v, const std::vector<unsigned> & pi)
   {
     _buffer.clear();
+    std::copy(v.begin(), v.end(), std::back_inserter(_buffer));
+    _buffer.push_back((unsigned)(-1));
+    std::copy(pi.begin(), pi.end(), std::back_inserter(_buffer));
+    _buffer.push_back((unsigned)(-1));    
     _buffer.push_back((unsigned)fact_type::CANONICAL);
     return std::move(_buffer);
   }
@@ -1321,7 +1329,10 @@ public:
 	return false;
       }
 
-    fd.add_sequence(convert_to_sequence::canonical());
+    canonical_form_derived = true;
+    if(gcp != nullptr)
+      *gcp = _g.apply_permutation(_pi); 
+    fd.add_sequence(convert_to_sequence::canonical(_v, _pi));
     return true;
   }
   
@@ -1342,6 +1353,7 @@ template <typename T>
 void read_sequence(T & istr, std::vector<unsigned> & s)
 {
   unsigned size = read_utf8(istr);
+  //  std::cout << "SIZE: " << size << std::endl;
   for(unsigned i = 0; i < size; i++)
     s.push_back(read_utf8(istr));
 }
@@ -1369,12 +1381,14 @@ rule_ptr read_next_rule(T & istr, const graph & g, const coloring & pi0)
     {
       if(code == (unsigned)rule_type::COLORING_AXIOM)
 	{
-	  //	  std::cout << "COLORING AXIOM" << std::endl;	  
+	  //	  std::cout << "COLORING AXIOM" << std::endl;
+	  
 	  return std::make_shared<coloring_axiom_rule>(g, pi0);	  
 	}
       else if(code == (unsigned)rule_type::INDIVIDUALIZE)
 	{
-	  //std::cout << "INDIVIDUALIZE" << std::endl;	  
+	  //std::cout << "INDIVIDUALIZE" << std::endl;
+	  
 	  std::vector<unsigned> v;
 	  read_sequence(istr,v);
 	  unsigned w;
@@ -1574,46 +1588,25 @@ void handler(int signum)
 
 #endif
 
-int main(int argc, char ** argv)
+void check_proof(const graph & g, const coloring & pi0, char * proof_file_path, bool human_readable = false)
 {
-  if(argc < 3)
-    {
-      std::cerr << "usage: " << argv[0] << " graph_file proof_file [h]" << std::endl;
-      exit(1);
-    }
-  
-  graph g;
-
-  std::ifstream graph_file(argv[1]);
-
-  if(!graph_file)
-    {
-      std::cerr << "Cannot open file for reading: " << argv[1] << std::endl;
-      exit(1);
-    }
-  
-  graph_file >> g;
-  graph_file.close();
-  std::cout << "Reading graph done" << std::endl;
-  coloring pi0(g.num_nodes());
-
 #ifndef _ENABLE_MMAP
   
-  std::ifstream istr(argv[2]);
+  std::ifstream istr(proof_file_path);
 
   if(!istr)
     {
-      std::cerr << "Cannot open file for reading: " << argv[2] << std::endl;
+      std::cerr << "Cannot open file for reading: " << proof_file_path << std::endl;
       exit(1);
-    }
-
+    }  
 #else
-  if(!istr.map_file(std::string(argv[2])))
+  
+  if(!istr.map_file(std::string(proof_file_path)))
     {
-      std::cerr << "Cannot map file for reading: " << argv[2] << std::endl;
+      std::cerr << "Cannot map file for reading: " << proof_file_path << std::endl;
       exit(1);
     }
-
+  
   struct sigaction act;
   sigemptyset(&act.sa_mask);
   act.sa_flags = 0;
@@ -1623,19 +1616,28 @@ int main(int argc, char ** argv)
   
   rule_ptr rp;
 
-  if(argc >= 4 && argv[3][0] == 'h')
+  unsigned num_nodes = read_utf8(istr);
+  if(num_nodes != g.num_nodes())
+    {
+      std::cerr << "Graph for which the proof is generated and given graph have different number of nodes (possibly wrong graph file given)!!" << std::endl;
+      exit(1);
+    }
+  
+  if(human_readable)
     {      
       while((rp = read_next_rule(istr, g, pi0)).get() != nullptr)
 	{     
 	  rp->out(std::cout);
 	}
-      return 0;
+      return;
     }
   
   fact_database_t fd;
   std::string error_message;
 
+#ifdef _ENABLE_MMAP 
   alarm(1);
+#endif
   
   while((rp = read_next_rule(istr, g, pi0)).get() != nullptr)
     {      
@@ -1643,17 +1645,122 @@ int main(int argc, char ** argv)
 	{	
 	  rp->out(std::cout);
 	  std::cout << "ERROR: " << error_message << std::endl;
-	  return 1;
+	  exit(1);
 	}
     }
   
-  if(!fd.sequence_exists(convert_to_sequence::canonical()))
+  if(!canonical_form_derived)
     {
       std::cout << "ERROR: Canonical leaf fact not derived!" << std::endl;
-      return 1;
+      exit(1);
+    }
+  else
+    {
+      std::cout << "PROOF OK" << std::endl;
+    }
+
+#ifdef _ENABLE_MMAP
+  sigemptyset(&act.sa_mask);
+  act.sa_flags = 0;
+  act.sa_handler = SIG_IGN;  
+  sigaction(SIGALRM, &act, NULL);
+#endif
+}
+
+int main(int argc, char ** argv)
+{
+  
+  if(argc < 3)
+    {
+      std::cerr << "usage: " << argv[0] << " graph_file proof_file [-h | canon_graph_file | graph2_file proof2_file]" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "Examples: " << std::endl;
+      std::cerr << "1) The command: " << std::endl;
+      std::cerr << "   " << argv[0] << " input_graph.in proof_file.in" << std::endl;
+      std::cerr << "checks the proof given in proof_file.in for the graph given in input_graph.in" << std::endl;
+      std::cerr << "2) The command: " << std::endl;
+      std::cerr << "   " << argv[0] << " input_graph.in proof_file.in -h" << std::endl;
+      std::cerr << "prints the proof rules from proof_file.in for the graph given in input_graph.in in a human readable form (for debugging)" << std::endl;
+      std::cerr << "3) The command: " << std::endl;
+      std::cerr << "   " << argv[0] << " input_graph.in proof_file.in can_graph.in" << std::endl;
+      std::cerr << "checks the proof given in proof_file.in for the graph given in input_graph.in, and then compares the derived canonical form with the graph given in can_graph.in" << std::endl;
+      std::cerr << "4) The command: " << std::endl;
+      std::cerr << "   " << argv[0] << " input_graph1.in proof_file1.in input_graph2.in proof_file2.in" << std::endl;
+      std::cerr << "checks the proof given in proof_file{1,2}.in for the graph given in input_graph{1,2}.in, and then compares the derived canonical forms of the two graphs" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "All graphs should be given in DIMACS format" << std::endl << std::endl;
+      exit(1);
     }
   
-  std::cout << "OK" << std::endl;
+  graph g;
+  graph gc;
+  
+  std::ifstream graph_file(argv[1]);
+
+  if(!graph_file)
+    {
+      std::cerr << "Cannot open file for reading: " << argv[1] << std::endl;
+      exit(1);
+    }
+  
+  graph_file >> g;
+  graph_file.close();  
+  std::cerr << "Reading graph done" << std::endl;
+  coloring pi0(g.num_nodes());
+
+  bool human_readable = false;
+  if(argc >= 4)
+    {
+      if(std::string(argv[3]) == std::string("-h"))
+	human_readable = true;
+      else
+	gcp = &gc;
+    }
+  check_proof(g, pi0, argv[2], human_readable);
+
+  if(argc == 4 && !human_readable)
+    {
+      std::ifstream can_ifile(argv[3]);
+
+      if(!can_ifile)
+	{
+	  std::cerr << "Cannot open file for reading: " << argv[3] << std::endl;
+	  exit(1);
+	}
+
+      graph igc;
+      can_ifile >> igc;
+      can_ifile.close();
+      if(igc.compare_to(gc) != 0)
+	std::cout << "ERROR: Derived canonical graph is different from given canonical form" << std::endl;
+      else
+	std::cout << "CANONICAL FORM OK" << std::endl;
+    }
+  else if(argc >= 5 && !human_readable)
+    {
+      graph g2;
+      graph gc2;
+      std::ifstream graph2_file(argv[3]);
+      if(!graph2_file)
+	{
+	  std::cerr << "Cannot open file for reading: " << argv[3] << std::endl;
+	  exit(1);
+	}
+
+      graph2_file >> g2;
+      graph2_file.close();
+      std::cerr << "Reading second graph done" << std::endl;
+      coloring pi2(g2.num_nodes());
+      gcp = &gc2;
+      canonical_form_derived = false;
+      check_proof(g2, pi2, argv[4], false);
+
+      if(gc.compare_to(gc2) != 0)
+	std::cout << "Graphs have different canonical forms (NOT isomorphic)" << std::endl;	  	  
+      else
+	std::cout << "Graphs have equal canonical forms (isomorphic)" << std::endl;
+    }
+  
   
   return 0;
 }
