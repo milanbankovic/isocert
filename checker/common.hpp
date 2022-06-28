@@ -176,6 +176,11 @@ public:
 		std::cerr << "error reading file (line " << line_count << "): edge vertices not given (or badly formatted)" << std::endl;
 		exit(1);
 	      }
+	    if(i > n || j > n)
+	      {
+		std::cerr << "error reading file (line " << line_count << "): edge vertices are invalid (greater than the total number of vertices)" << std::endl;
+		exit(1);
+	      }
 	    std::string rest;
 	    sstr >> rest;
 	    if(!rest.empty())
