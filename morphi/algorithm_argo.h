@@ -19,6 +19,17 @@
 
 namespace morphi {
 
+struct Statistics {
+    size_t tree_size = 0;
+    size_t bad_nodes = 0;
+    size_t orbit_prunes = 0;
+    size_t max_nodes = 0;
+    size_t aut_nodes = 0;
+    size_t proof_size = 0;
+    clock_t solve_time = 0;
+    clock_t prove_time = 0;
+};
+
 template<typename T, typename HashType>
 class AlgorithmArgonaut {
 public:
@@ -63,9 +74,13 @@ public:
         input_coloring.copy(coloring);
     }
 
+    // Generate the proof according to the pruned search tree
     void generateProof() {
+        statistics.prove_time = clock();
+
         coloring.copy(input_coloring);
         proof.open();
+        proof.writeUTF8(graph.m_vertices);
         proof.coloringAxiom();
         prove(true);
         proof.pathAxiom();
@@ -74,10 +89,13 @@ public:
         }
         proof.canonicalLeaf(max_node.stabilized, max_node.permutation.m_forward);
         proof.close();
+
+        statistics.prove_time = clock() - statistics.prove_time;
         //std::cerr << "Proof size: " << statistics.proof_size << std::endl;
     }
 
-    // returns whether the whole subtree has been pruned
+    // Generate the proof according to the pruned search tree
+    // Returns whether the whole subtree has been pruned
     bool prove(bool canon_path) {
         statistics.proof_size++;
 
@@ -148,9 +166,12 @@ public:
         return false;
     }
 
+    // Execute the search and optionally genrate the proof while doing so
     const Permutation<T>& solve() {
+        statistics.solve_time = clock();
         if(proof_type == ProofType::SearchTree) {
             proof.open();
+            proof.writeUTF8(graph.m_vertices);
             proof.coloringAxiom();
             solve(true, true);
             proof.pathAxiom();
@@ -164,6 +185,7 @@ public:
         else {
             solve(true, true);
         }
+        statistics.solve_time = clock() - statistics.solve_time;
         /*std::cerr << "Tree size: " << statistics.tree_size << std::endl;
         std::cerr << "Bad nodes: " << statistics.bad_nodes << std::endl;
         std::cerr << "Aut size: " << automorphisms.m_elements << std::endl;
@@ -175,9 +197,10 @@ public:
         return max_node.permutation;
     }
 
-    // returns backjump level if there is one
-    // returns previous level if the whole subtree has been proven pruned
-    // returns current level if not every node has been proven pruned
+    // Execute the search and optionally genrate the proof while doing so
+    // Returns backjump level if there is one
+    // Returns previous level if the whole subtree has been proven pruned
+    // Returns current level if not every node has been proven pruned
     T solve(bool max_path, bool aut_path) {
         statistics.tree_size++;
 
@@ -195,7 +218,7 @@ public:
         if(proof_type == ProofType::SearchTree)
             proof.invariantAxiom(stabilized);
 
-        // update max_path, aut_path nodes
+        // Update max_path, aut_path nodes
         if(!fst_node.is_leaf)
             fst_node.invariants.push(invariants.back());
 
@@ -308,7 +331,8 @@ public:
         }
 
         if(proof_type == ProofType::SearchTree && cell_content.m_size > 0 && pruned_count == cell_content.m_size) {
-            proof.pruneParent(level, stabilized, cell_content);
+            if(max_path)
+                proof.pruneParent(level, stabilized, cell_content);
             unrefine();
             return level - 1;
         }
@@ -413,6 +437,7 @@ public:
         coloring.m_cell_end[cell_idx] = coloring.m_cell_end[cell_idx + 1];
     }
 
+    // Refines (in linear time) according to a cell of size 1
     template<typename ActiveSet>
     void refine1(size_t work_cell, ActiveSet& active_cells) {
 #ifdef DEBUG_OUT
@@ -452,6 +477,7 @@ public:
 #endif
     }
 
+    // Refines (in linear time) according to a cell of size 2
     template<typename ActiveSet>
     void refine2(size_t work_cell, ActiveSet& active_cells) {
 #ifdef DEBUG_OUT
@@ -533,6 +559,7 @@ public:
 #endif
     }
 
+    // Refines according to a cell of size greater than 2
     template<typename ActiveSet>
     void refineN(size_t work_cell, ActiveSet& active_cells) {
 #ifdef DEBUG_OUT
@@ -630,6 +657,7 @@ public:
 #endif
     }
 
+    // Selects the refinement procedure according to the cell size
     template<typename ActiveSet>
     void refineCells(size_t work_cell, size_t work_size, ActiveSet& active_cells) {
         if(work_size == 1)
@@ -707,6 +735,7 @@ public:
         invariants.push(invariant);
     }
 
+    // Calculates the invariant used in an old version of morphi
     HashType calculateMorphiInvariant() {
         HashType invariant = 0;
         if(stabilized.m_size == 0)
@@ -736,6 +765,7 @@ public:
         return invariant;
     }
 
+    // Calculates the quotient graph invariant by brute force
     HashType calculateMultisetQuotientInvariant() {
         auto hashTriple = [](HashType x, HashType y, HashType z) {
             HashType hash = 0;
@@ -758,6 +788,8 @@ public:
         return invariant;
     }
 
+    // Calculates the quotient graph invariant incrementally
+    // This procedure is used when moving down the search tree
     HashType calculateQuotientInvariantIncrement() {
         if(stabilized.m_size == 0)
             return calculateMultisetQuotientInvariant();
@@ -857,6 +889,8 @@ public:
         return invariant;
     }
 
+    // Calculates the quotient graph invariant incrementally
+    // This procedure is used when moving up the search tree
     void calculateQuotientInvariantDecrement() {
         if(stabilized.m_size == 0)
             return;
@@ -917,6 +951,7 @@ public:
         }
     }
 
+    // Undoes the refinement when moving back up the search tree
     void unrefine() {
         calculateQuotientInvariantDecrement();
 
@@ -936,6 +971,8 @@ public:
             invariants.pop();
     }
 
+    // Calculates the target cell at a specified level of the current node path
+    // Used only during proof generation
     Array<T> targetCell(const Coloring<T>& coloring, size_t level) {
         size_t cell_idx = 0;
         size_t cell_end = 0;
@@ -997,14 +1034,7 @@ public:
     Proof<T> proof;
 
     // Statistics
-    struct Statistics {
-        size_t tree_size = 0;
-        size_t bad_nodes = 0;
-        size_t orbit_prunes = 0;
-        size_t max_nodes = 0;
-        size_t aut_nodes = 0;
-        size_t proof_size = 0;
-    } statistics;
+    Statistics statistics;
 };
 
 } // namespace

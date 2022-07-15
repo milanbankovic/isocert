@@ -13,7 +13,6 @@ public:
 
     bool reserve(size_t bytes) {
         if((m_start = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) != MAP_FAILED) {
-        //if((m_start = malloc(bytes)) != nullptr) {
             m_bytes = bytes;
             return true;
         }
