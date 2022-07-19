@@ -66,4 +66,8 @@ using the `-o proof_file.out` option.
 
  - proof.h: Defines an interface for exporting proofs.
 
- - utility.h, assertions.h, tests.h: Contain some utility structures and functions.
+ - utility.h, assertions.h, tests.h: Contain some utility structures and
+ functions.
+
+ - bugs/: Contains patch files which introduce various bugs into the solver.
+   Used to show that the checker rejects false proofs.

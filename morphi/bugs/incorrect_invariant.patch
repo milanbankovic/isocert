@@ -1,0 +1,18 @@
+869,885d868
+<         // Update New <- New
+<         for(size_t idx = 0; idx < new_cells.m_size; idx++) {
+<             size_t cell_idx = new_cells[idx];
+<             for(size_t jdx = 0; jdx <= idx; jdx++) {
+<                 size_t cell_jdx = new_cells[jdx];
+<                 if(is_old[cell_idx] && is_old[cell_jdx])
+<                     hash::multiset32sub(invariant, hashTriple(cell_jdx, cell_idx, quotient_graph.at(cell_jdx, cell_idx)));
+<                 T adj_count = 0;
+<                 for(size_t kdx = cell_jdx; kdx < coloring.m_cell_end[cell_jdx]; kdx++)
+<                     adj_count += graph.adjacent(coloring[kdx], coloring[cell_idx]);
+< #ifdef DEBUG_SLOW_ASSERTS
+<                 assertCellAdjCount(adj_count, cell_jdx, coloring.m_cell_end[cell_jdx], cell_idx, coloring, graph);
+< #endif
+<                 hash::multiset32add(invariant, hashTriple(cell_jdx, cell_idx, adj_count));
+<                 quotient_graph.set(cell_jdx, cell_idx, adj_count);
+<             }
+<         }

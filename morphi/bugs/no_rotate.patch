@@ -1,0 +1,10 @@
+459d458
+<                         coloring.rotate(cell_beg, cell_end, stabilized.m_size);
+512d510
+<                         coloring.rotate(cell_beg, cell_end, stabilized.m_size);
+517d514
+<                         coloring.rotate(split1, cell_end, stabilized.m_size);
+540d536
+<                         coloring.rotate(cell_beg, cell_end, stabilized.m_size);
+642d637
+<             coloring.rotate(max_cell, cell_end, stabilized.m_size);

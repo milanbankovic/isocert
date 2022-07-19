@@ -1,0 +1,3 @@
+296a297,298
+> 						if(ptr == cell_content.m_data)
+> 							continue;

@@ -1,0 +1,5 @@
+334,335c334
+<             if(max_path)
+<                 proof.pruneParent(level, stabilized, cell_content);
+---
+>             proof.pruneParent(level, stabilized, cell_content);

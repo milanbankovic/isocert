@@ -166,7 +166,7 @@ public:
         return false;
     }
 
-    // Execute the search and optionally genrate the proof while doing so
+    // Execute the search and optionally generate the proof while doing so
     const Permutation<T>& solve() {
         statistics.solve_time = clock();
         if(proof_type == ProofType::SearchTree) {

@@ -1,0 +1,4 @@
+316c316
+<             if(level > backjump) {
+---
+>             if(level >= backjump) {

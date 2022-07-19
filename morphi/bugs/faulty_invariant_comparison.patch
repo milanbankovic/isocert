@@ -1,0 +1,16 @@
+226,233c226,231
+<         if(max_path) {
+<             if(max_node.invariants.m_size <= level || invariants.back() > max_node.invariants[level])
+<                 max_cmp = 1;
+<             else if(invariants.back() == max_node.invariants[level])
+<                 max_cmp = 0;
+<             else
+<                 max_cmp = -1;
+<         }
+---
+> 				if(max_node.invariants.m_size <= level || invariants.back() > max_node.invariants[level])
+> 						max_cmp = 1;
+> 				else if(invariants.back() == max_node.invariants[level])
+> 						max_cmp = 0;
+> 				else
+> 						max_cmp = -1;
