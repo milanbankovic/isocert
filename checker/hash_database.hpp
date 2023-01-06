@@ -41,5 +41,4 @@ public:
 
 };
 
-
 #endif // _HASH_DATABASE_H

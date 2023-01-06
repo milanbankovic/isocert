@@ -22,55 +22,6 @@
 
 using permutation = std::vector<unsigned>;
 
-permutation initial_permutation(unsigned n)
-{
-  permutation p;
-  p.resize(n);
-  for(unsigned i = 0; i < n; i++)
-    p[i] = i;
-  return p;
-}
-
-permutation operator ~ (const permutation & p)
-{
-  permutation ret;
-  ret.resize(p.size());
-  for(unsigned i = 0; i < p.size(); i++)
-    ret[p[i]] = i;
-  return ret;
-}
-
-permutation operator * (const permutation & p1, const permutation & p2)
-{
-  permutation ret;
-  ret.resize(p1.size());
-  for(unsigned i = 0; i < p1.size(); i++)
-    ret[i] = p1[p2[i]];
-
-  return ret;
-}
-
-void shuffle_permutation(permutation & p)
-{
-  std::mt19937 g(time(0));
-  std::shuffle(p.begin(), p.end(), g);  
-}
-
-permutation random_permutation(unsigned n)
-{
-  permutation p = initial_permutation(n);
-  shuffle_permutation(p);
-  return p;
-}
-
-
-std::ostream & operator << (std::ostream & ostr, const permutation & p)
-{
-  for(unsigned i = 0; i < p.size(); i++)
-    ostr << p[i] << " ";
-  return ostr;
-}
-
 class graph {
 private:
   std::vector<std::vector<bool>> _edges;
@@ -144,24 +95,6 @@ public:
     return 0;	
   }
   
-  void out(std::ostream & ostr) const
-  {
-    ostr << "   ";
-    for(unsigned i = 0; i < num_nodes(); i++)
-      ostr << std::setw(2) << i  << " ";
-    ostr << std::endl;
-    for(unsigned i = 0; i < num_nodes(); i++)
-      {
-	ostr << std::setw(2) << i << " ";
-	
-	for(unsigned j = 0; j < num_nodes(); j++)
-	  {
-	    ostr << std::setw(2) << _edges[i][j] << " ";	    
-	  }
-	ostr << std::endl;
-      }
-  }
-
   unsigned num_edges() const
   {
     unsigned c = 0;
@@ -267,12 +200,6 @@ public:
   }
 };
 
-inline
-std::ostream & operator << (std::ostream & ostr, const graph & g)
-{
-  g.out(ostr);
-  return ostr;
-}
 
 inline
 std::istream & operator >> (std::istream & istr, graph & g)
@@ -372,18 +299,6 @@ public:
       calculate_invariant(g);
   }
 
-  
-  coloring(std::vector<unsigned> && node_colors, unsigned num_of_colors, unsigned invariant)
-    :_node_colors(std::move(node_colors)),
-     _cells(num_of_colors),
-     _invariant(invariant)    
-  {
-    for(unsigned i = 0; i < _node_colors.size(); i++)
-      {
-	_cells[_node_colors[i]].push_back(i);
-      }
-  }
-  
   coloring(std::vector<std::vector<unsigned>> && cells, unsigned num_of_nodes, const graph & g, bool calculate = true)
     :_node_colors(num_of_nodes),
      _cells(std::move(cells)),
@@ -490,96 +405,6 @@ std::ostream & operator << (std::ostream & ostr, const coloring & c)
 {
   c.out(ostr);
   return ostr;
-}
-
-template<typename T>
-void print_vector(const std::vector<T> & v)
-{
-  for(const auto & x : v)
-    std::cout << x << ", ";
-  std::cout << std::endl;
-}
-
-
-void write_utf8(unsigned code, std::ostream & ostr)
-{
-  static char buff[6];
-  unsigned count = 0;
-  // one byte (up to 7 bits)
-  if((code & 0xFFFFFF80) == 0)
-    {
-      buff[count++] = (char)code;
-    }
-  // two bytes (up to 11 bits)
-  else if((code & 0xFFFFF800) == 0)
-    {
-      char c;
-	  
-      c = 0xC0 | (0x1F & (code >> 6));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & code);
-      buff[count++] = c;
-    }
-  // three bytes (up to 16 bits)
-  else if((code & 0xFFFF0000) == 0)
-    {
-      char c;
-
-      c = 0xE0 | (0xF & (code >> 12));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 6));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & code);
-      buff[count++] = c;
-    }
-  // four bytes (up to 21 bits)
-  else if((code & 0xFFE00000) == 0)
-    {
-      char c;
-
-      c =  0xF0 | (0x7 & (code >> 18));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 12));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 6));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & code);
-      buff[count++] = c;
-    }
-  // five bytes (up to 26 bits)
-  else if((code & 0xFC000000) == 0)
-    {
-      char c;
-
-      c = 0xF8 | (0x3 & (code >> 24));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 18));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 12));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 6));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & code);
-      buff[count++] = c;
-    }
-  else // six bytes (up to 31 bits)
-    {
-      char c;
-
-      c = 0xFC | (0x1 & (code >> 30));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 24));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 18));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 12));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & (code >> 6));
-      buff[count++] = c;
-      c = 0x80 | (0x3F & code);
-      buff[count++] = c;	
-    }
-  ostr.write(buff, count);
 }
 
 template <typename T>
