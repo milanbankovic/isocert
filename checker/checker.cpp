@@ -148,6 +148,7 @@ graph * gcp = nullptr;
 class convert_to_sequence {
 private:
   enum class fact_type {
+    IS_NODE,
     COLORING_EQUAL,
     COLORING_FINER,
     TARGET_CELL,
@@ -161,6 +162,26 @@ private:
   static std::vector<unsigned>  _buffer;
 public:
 
+  static std::vector<unsigned> && is_node(const std::vector<unsigned> & v)
+  {
+    _buffer.clear();
+    std::copy(v.begin(), v.end(), std::back_inserter(_buffer));
+    _buffer.push_back((unsigned)(-1));
+    _buffer.push_back((unsigned)fact_type::IS_NODE);
+    return std::move(_buffer);
+  }
+
+  static std::vector<unsigned> && is_node(const std::vector<unsigned> & v, unsigned x)
+  {
+    _buffer.clear();
+    std::copy(v.begin(), v.end(), std::back_inserter(_buffer));
+    _buffer.push_back(x);
+    _buffer.push_back((unsigned)(-1));
+    _buffer.push_back((unsigned)fact_type::IS_NODE);
+    return std::move(_buffer);
+    
+  }
+  
   static std::vector<unsigned> && coloring_equal(const std::vector<unsigned> & v, const std::vector<unsigned> & pi)
   {
     _buffer.clear();
@@ -343,12 +364,13 @@ public:
   {}
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "ColoringAxiom: [] ==> R(G,pi0,[]) <= " << _pi0 << std::endl;
+    ostr << "ColoringAxiom: [|  |] ==> " << _pi0 << " --> R(G,pi0,[]),  [] in T(G,pi0)" << std::endl;
   }
   
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
   {
     fd.add_sequence(convert_to_sequence::coloring_finer({}, _pi0.node_colors()));
+    fd.add_sequence(convert_to_sequence::is_node({}));		    
     return true;
   }
   
@@ -372,29 +394,36 @@ public:
 
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "Individualize: [R(G,pi0,[";
+    ostr << "Individualize: [| R(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
     ostr << "])=";
-    ostr << coloring(std::vector<unsigned>(_pi), _g);
-    ostr << "] ==> R(G,pi0,[";
+    ostr << coloring(std::vector<unsigned>(_pi), _g) << ", [";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
-    ostr << _v << "]) <= ";
-    ostr << coloring(individualize(_pi, _v), _g) << std::endl;
+    ostr << _v << "] in T(G,pi0) |] ==> " << coloring(individualize(_pi, _v), _g) << " --> R(G,pi0,[";
+    for(unsigned i = 0; i < _p.size(); i++)
+      ostr << _p[i] << " ";
+    ostr << _v << "])" << std::endl;    
   }
 
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
   {
     if(!fd.sequence_exists(convert_to_sequence::coloring_equal(_p, _pi)))
       {
-	error_message = "Premise not proved!";
+	error_message = "First premise not proved!";
 	return false;
       }
+
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_p, _v)))
+      {
+	error_message = "Second premise not proved!";
+	return false;
+      }
+    
     fd.add_sequence(convert_to_sequence::coloring_finer(_p, _v, individualize(_pi, _v)));
     return true;
   }
-
   
 };
 
@@ -415,17 +444,17 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "SplitColoring: [R(G,pi0,[";
+    coloring c(std::vector<unsigned>(_pi), _g);
+    ostr << "SplitColoring: [| " << c << " --> R(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
-    coloring c(std::vector<unsigned>(_pi), _g);
-    
+
     unsigned m = find_first_splitter(_g, c);
     
-    ostr << "]) <= " << c << "] ==> R(G,pi0,[";
+    ostr << "]) |] ==> " << split(_g, c, m) << " --> R(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";    
-    ostr << "]) <= " << split(_g, c, m) << " (for: i=" << m << ")" << std::endl;
+    ostr << "]) (for: i=" << m << ")" << std::endl;
   }
 
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
@@ -464,11 +493,11 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "Equitable: [R(G,pi0,[";
+    coloring c(std::vector<unsigned>(_pi), _g);
+    ostr << "Equitable: [| " << c << " --> R(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
-    coloring c(std::vector<unsigned>(_pi), _g);
-    ostr << "]) <= " << c << "] ==> R(G,pi0,[";
+    ostr << "]) |] ==> R(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
     ostr << "]) = " << c << std::endl; 
@@ -508,11 +537,11 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "TargetCell: R(G,pi0,[";
+    ostr << "TargetCell: [| R(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
     coloring c(std::vector<unsigned>(_pi), _g);
-    ostr << "]) = " << c << "] ==> T(G,pi0,[";
+    ostr << "]) = " << c << " |] ==> T(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
     ostr << "]) = {";
@@ -520,7 +549,17 @@ public:
     const std::vector<unsigned> & fns = first_non_singleton(c, s);
     for(unsigned i = 0; i < fns.size(); i++)
       ostr << fns[i] << " ";
-    ostr << "} (for: i = " << s << ")" << std::endl;
+    ostr << "} (for: i = " << s << "), ";
+    for(unsigned i = 0; i < fns.size(); i++)
+      {
+	ostr << "[";
+	for(unsigned j = 0; j < _p.size(); j++)
+	  ostr << _p[j] << " ";
+	ostr << fns[i] << "] in T(G,pi0)";
+	if (i != fns.size() - 1)
+	  ostr << ",";
+      }
+    ostr << std::endl;
   }
   
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
@@ -541,6 +580,10 @@ public:
       }
 
     fd.add_sequence(convert_to_sequence::target_cell(_p, fns));
+
+    for(unsigned i = 0; i < fns.size(); i++)
+      fd.add_sequence(convert_to_sequence::is_node(_p, fns[i])); 
+    
     return true;
   }
 
@@ -558,7 +601,10 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "InvariantAxiom: [] ==> fi(G,pi0, [";
+    ostr << "InvariantAxiom: [| [";
+    for(unsigned i = 0; i < _p.size(); i++)
+      ostr << _p[i] << " ";
+    ostr << "] in T(G,pi0) |] ==> fi(G,pi0, [";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
     ostr << "]) = fi(G,pi0, [";
@@ -569,6 +615,12 @@ public:
 
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
   {
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_p)))
+      {
+	error_message = "Premise not proved!";
+	return false;
+      }
+    
     fd.add_sequence(convert_to_sequence::invariants_equal(_p, _p));
     return true;
   }
@@ -596,7 +648,7 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "InvariantsEqual: [fi(G,pi0,[";
+    ostr << "InvariantsEqual: [| fi(G,pi0,[";
     for(unsigned i = 0; i < _vp.size() - 1; i++)
       ostr << _vp[i] << " ";
     ostr << "]) = fi(G,pi0,[";
@@ -610,7 +662,7 @@ public:
     for(unsigned i = 0; i < _wp.size(); i++)
       ostr << _wp[i] << " ";
     coloring c2(std::vector<unsigned>(_pi2),_g);
-    ostr << "]) = " << c2 << "] ==> fi(G,pi0,[";
+    ostr << "]) = " << c2 << " |] ==> fi(G,pi0,[";
     for(unsigned i = 0; i < _vp.size(); i++)
       ostr << _vp[i] << " ";
     ostr << "]) = fi(G,pi0,[";
@@ -668,13 +720,13 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "InvariantsEqualSym: [fi(G,pi0,[";
+    ostr << "InvariantsEqualSym: [| fi(G,pi0,[";
     for(unsigned i = 0; i < _vp.size(); i++)
       ostr << _vp[i] << " ";
     ostr << "]) = fi(G,pi0,[";
     for(unsigned i = 0; i < _wp.size(); i++)
       ostr << _wp[i] << " ";
-    ostr << "])] ==> fi(G,pi0,[";
+    ostr << "]) |] ==> fi(G,pi0,[";
     for(unsigned i = 0; i < _wp.size(); i++)
       ostr << _wp[i] << " ";
     ostr << "]) = fi(G,pi0,[";
@@ -715,7 +767,10 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "OrbitsAxiom: [] ==> { " << _v << " } <| orbits(G,pi0,[";
+    ostr << "OrbitsAxiom: [| [";
+    for(unsigned i = 0; i < _p.size(); i++)
+      ostr << _p[i] << " ";
+    ostr << "] in T(G,pi0) |] ==> { " << _v << " } <| orbits(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
     ostr << "])" << std::endl;
@@ -723,6 +778,18 @@ public:
 
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
   {
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_p)))
+      {
+	error_message = "Premise not proved!";
+	return false;
+      }
+    
+    if(_v >= _g.num_nodes())
+      {
+	error_message = "Given vertex is not a vertex of G!";
+	return false;
+      }
+    
     fd.add_sequence(convert_to_sequence::orbit_subset({_v}, _p));
     return true;
   }
@@ -758,7 +825,7 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "MergeOrbits: [{";
+    ostr << "MergeOrbits: [| {";
     for(unsigned i = 0; i < _o1.size(); i++)
       ostr << _o1[i] << " ";
     ostr << "} <| orbits(G,pi0,[";
@@ -770,7 +837,7 @@ public:
     ostr << "} <| orbits(G,pi0,[";
     for(unsigned i = 0; i < _p.size(); i++)
       ostr << _p[i] << " ";
-    ostr << "])] ==> {";
+    ostr << "]) |] ==> {";
     std::vector<unsigned> res;
     std::merge(_o1.begin(), _o1.end(), _o2.begin(), _o2.end(), std::back_inserter(res)); 
     auto it = std::unique(res.begin(), res.end()); // probably unnecessary   
@@ -822,6 +889,18 @@ public:
 	  }
       }
 
+    if(std::find(_o1.begin(), _o1.end(), _w1) == _o1.end())
+      {
+	error_message = "w1 does not belong to O1!";
+	return false;
+      }
+
+    if(std::find(_o2.begin(), _o2.end(), _w2) == _o2.end())
+      {
+	error_message = "w2 does not belong to O2!";
+	return false;
+      }
+
     if(_sigma[_w1] != _w2)
       {
 	error_message = "Permutation does not merge orbits";
@@ -859,7 +938,7 @@ public:
   		       
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "PruneInvariant: [fi(G,pi0,[";
+    ostr << "PruneInvariant: [| fi(G,pi0,[";
     for(unsigned i = 0; i < _v.size() - 1; i++)
       ostr << _v[i] << " ";
     ostr << "]) = fi(G,pi0, [";
@@ -871,7 +950,7 @@ public:
     ostr << "]) = " << coloring(std::vector<unsigned>(_pi1),_g) << ", R(G, pi0, [";
     for(unsigned i = 0; i < _w.size(); i++)
       ostr << _w[i] << " ";
-    ostr << "]) = " << coloring(std::vector<unsigned>(_pi2),_g) << " ] ==> pruned(G,pi0,[";
+    ostr << "]) = " << coloring(std::vector<unsigned>(_pi2),_g) << " |] ==> pruned(G,pi0,[";
     for(unsigned i = 0; i < _w.size(); i++)
       ostr << _w[i] << " ";
     ostr << "])" << std::endl;
@@ -933,7 +1012,7 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "PruneLeaf: [R(G,pi0,[";
+    ostr << "PruneLeaf: [| R(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     ostr << "]) = " << coloring(std::vector<unsigned>(_pi1), _g) << ", R(G,pi0,[";
@@ -945,7 +1024,7 @@ public:
     ostr << "]) = fi(G,pi0,[";
     for(unsigned i = 0; i < _w.size(); i++)
       ostr << _w[i] << " ";
-    ostr << "])] ==> pruned(G,pi0,[";
+    ostr << "]) |] ==> pruned(G,pi0,[";
     for(unsigned i = 0; i < _w.size(); i++)
       ostr << _w[i] << " ";
     ostr << "])" << std::endl;
@@ -984,7 +1063,7 @@ public:
       {        
 	if(_g.apply_permutation(_pi1).compare_to(_g.apply_permutation(_pi2)) <= 0)
 	  {
-	    error_message = "First graph not greater!";
+	    error_message = "First coloring discrete, but first graph not greater!";
 	    return false;
 	  }
       }
@@ -1013,13 +1092,16 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "PruneAutomorphism: [] ==> pruned(G,pi0,[";
-    for(unsigned i = 0; i < _w.size(); i++)
-      ostr << _w[i] << " ";
-    ostr << "]) (for: v = [";
+    ostr << "PruneAutomorphism: [| [";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
-    ostr << "], sigma = <";
+    ostr << "] in T(G,pi0), [";
+    for(unsigned i = 0; i < _w.size(); i++)
+      ostr << _w[i] << " ";
+    ostr << "] in T(G,pi0) |] ==> pruned(G,pi0,[";
+    for(unsigned i = 0; i < _w.size(); i++)
+      ostr << _w[i] << " ";
+    ostr << "]) (for: sigma = <";
     for(unsigned i = 0; i < _sigma.size(); i++)
       ostr << _sigma[i] << " ";
     ostr << ">)" << std::endl;
@@ -1028,6 +1110,18 @@ public:
 
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
   {
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_v)))
+      {
+	error_message = "First premise not proved!";
+	return false;
+      }
+
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_w)))
+      {
+	error_message = "Second premise not proved!";
+	return false;
+      }
+    
     if(_v >= _w)
       {
 	error_message = "First sequence is not lexicographically smaller!";
@@ -1083,13 +1177,19 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "PruneOrbits: [{";
+    ostr << "PruneOrbits: [| [";
+    for(unsigned i = 0; i < _v.size(); i++)
+      ostr << _v[i] << " ";
+    ostr << _w1 << "] in T(G,pi0), [";
+    for(unsigned i = 0; i < _v.size(); i++)
+      ostr << _v[i] << " ";
+    ostr << _w2 << "] in T(G,pi0), {";
     for(unsigned i = 0; i < _omega.size(); i++)
       ostr << _omega[i] << " ";
     ostr << "} <| orbits(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
-    ostr << "])] ==> pruned(G,pi0,[";
+    ostr << "]) |] ==> pruned(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     ostr << _w2 << "]) (for w1 = " << _w1 << ")" << std::endl;    
@@ -1098,9 +1198,23 @@ public:
 
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
   {
+
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_v, _w1)))
+      {
+	error_message = "First premise not proved!";
+	return false;
+      }
+
+    if(!fd.sequence_exists(convert_to_sequence::is_node(_v, _w2)))
+      {
+	error_message = "Second premise not proved!";
+	return false;
+      }
+
+    
     if(!fd.sequence_exists(convert_to_sequence::orbit_subset(_omega, _v)))
       {
-	error_message = "Premise not proved!";
+	error_message = "Third premise not proved!";
 	return false;
       }
 
@@ -1143,7 +1257,7 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "PruneParent: [T(G,pi0,[";
+    ostr << "PruneParent: [| T(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     ostr << "]) = {";
@@ -1157,7 +1271,7 @@ public:
 	  ostr << _v[j] << " ";
 	ostr << _w[i] << "]), ";       
       }
-    ostr << "] ==> pruned(G,pi0,[";
+    ostr << " |] ==> pruned(G,pi0,[";
     for(unsigned j = 0; j < _v.size(); j++)
       ostr << _v[j] << " ";
     ostr << "])" << std::endl;      
@@ -1194,7 +1308,7 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "PathAxiom: [] ==> on_path(G,pi0,[])" << std::endl;
+    ostr << "PathAxiom: [| |] ==> on_path(G,pi0,[])" << std::endl;
   }
 
 
@@ -1224,7 +1338,7 @@ public:
   
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "ExtendPath: [on_path(G,pi0,[";
+    ostr << "ExtendPath: [| on_path(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     ostr << "]), T(G,pi0,[";
@@ -1245,7 +1359,7 @@ public:
 	ostr << _w[i] << "]),";
 
       }
-    ostr << "] ==> on_path(G,pi0,[";
+    ostr << " |] ==> on_path(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     ostr << _w_max << "])" << std::endl;
@@ -1265,20 +1379,29 @@ public:
 	error_message = "Second premise not proved!";
 	return false;
       }
-
+    
+    bool w_max_found = false;
     for(unsigned i = 0; i < _w.size(); i++)
       {
 	if(_w[i] == _w_max)
-	  continue;
-
+	  {
+	    w_max_found = true;
+	    continue;
+	  }
 	if(!fd.sequence_exists(convert_to_sequence::pruned(_v, _w[i])))
 	  {
-	    std::cerr << "PRUNED PREMISE: " << i << " NOT PROVED (MAX: " << _w_max << ")" << std::endl;
+	    //std::cerr << "PRUNED PREMISE: " << i << " NOT PROVED (MAX: " << _w_max << ")" << std::endl;
 	    error_message = "One of 'pruned' premises not proved!";
 	    return false;
 	  }
       }
 
+    if(!w_max_found)
+      {
+	error_message = "Vertex not in W!";
+	return false;
+      }
+    
     fd.add_sequence(convert_to_sequence::on_path(_v, _w_max));    
     return true;
   }
@@ -1299,14 +1422,14 @@ public:
   {}
   virtual void out(std::ostream & ostr) const
   {
-    ostr << "CanonicalLeaf: [on_path(G,pi0,[";
+    ostr << "CanonicalLeaf: [| on_path(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     ostr << "]), R(G,pi0,[";
     for(unsigned i = 0; i < _v.size(); i++)
       ostr << _v[i] << " ";
     coloring pi(std::vector<unsigned>(_pi), _g);
-    ostr << "]) = " << pi << "] ==> C(G,pi0) = (G^pi,pi0^pi) (for: pi = " << pi << ")" << std::endl;    
+    ostr << "]) = " << pi << " |] ==> C(G,pi0) = (G^pi,pi0^pi) (for: pi = " << pi << ")" << std::endl;    
   }
   
   virtual bool check_rule(fact_database_t & fd, std::string & error_message) const
@@ -1688,7 +1811,7 @@ int main(int argc, char ** argv)
       std::cerr << "   " << argv[0] << " input_graph1.in proof_file1.in input_graph2.in proof_file2.in" << std::endl;
       std::cerr << "checks the proof given in proof_file{1,2}.in for the graph given in input_graph{1,2}.in, and then compares the derived canonical forms of the two graphs" << std::endl;
       std::cerr << std::endl;
-      std::cerr << "All graphs should be given in DIMACS format" << std::endl << std::endl;
+      std::cerr << "All graphs should be given in DIMACS format" << std::endl;
       exit(1);
     }
   

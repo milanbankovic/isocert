@@ -13,6 +13,17 @@ public:
   using elem_type = T;
 private:
 
+  template <typename U>
+  static void print_seq(const std::vector<U> & elems, std::ostream & ostr)
+  {
+    ostr << "[ ";
+    for(unsigned i = 0; i < elems.size(); i++)
+      {
+	ostr << elems[i] << " ";
+      }
+    ostr << "]" << std::endl;
+  }
+
   class trie_node;
   
   using trie_node_ptr = std::shared_ptr<trie_node>;
@@ -30,6 +41,37 @@ private:
     trie_node()
       :_valid(false)
     {}
+
+    void print_tree(std::ostream & ostr, unsigned depth) const
+    {
+      for(unsigned i = 0; i < depth; i++)
+	ostr << " ";
+      if(_valid)
+	ostr << "!"; 
+      print_seq(_elems, ostr);
+      
+      if(_children.has_value())
+	{
+	  depth++;
+	  for(const auto & p : _children.value())
+	    p.second->print_tree(ostr, depth);
+	}      
+    }
+
+    void print_all(std::ostream & ostr, std::vector<std::reference_wrapper<const elem_type>> && prefix = std::vector<std::reference_wrapper<const elem_type>>()) const
+    {
+      std::copy(_elems.begin(), _elems.end(), std::back_inserter(prefix));
+      
+      if(_valid)
+	print_seq(prefix, ostr);
+
+      if(_children.has_value())
+	{
+	  for(const auto & p : _children.value())
+	    p.second->print_all(ostr, std::move(prefix));	  
+	}    
+      prefix.resize(prefix.size() - _elems.size(), std::cref(_elems[0]));            
+    }    
   };
 
 
@@ -166,6 +208,24 @@ public:
       }
     return false;
   }
+
+  void print_tree(std::ostream & ostr) const
+  {
+    if(_root.get() == nullptr)
+      ostr << "<EMPTY>" << std::endl;
+    else
+      _root->print_tree(ostr, 0);
+  }
+
+  void print_all(std::ostream & ostr) const
+  {
+    if(_root.get() == nullptr)
+      ostr << "<EMPTY>" << std::endl;
+    else
+      _root->print_all(ostr);
+  }
+ 
+  
 };
 
 #endif // _TRIE_H
