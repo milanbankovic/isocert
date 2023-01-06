@@ -56,7 +56,11 @@ This repository contains four directories:
   of our implementations
 
 - thy: this directory contains a formalization (within Isabelle/HOL
-  theorem prover) of the McKay/Piperno's canonical labeling scheme
+  theorem prover) of the McKay/Piperno's canonical labeling scheme.
+  Our proof system is also formalized and its soundness is proven. We
+  also provide an abstract specification of the checker and prove its
+  correctness.
+  
 
 Further details may be found in each of the subdirectories.
 
