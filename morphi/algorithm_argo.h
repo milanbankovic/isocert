@@ -166,7 +166,7 @@ public:
         return false;
     }
 
-    // Execute the search and optionally generate the proof while doing so
+    // Execute the serach and optionally genrate the proof while doing so
     const Permutation<T>& solve() {
         statistics.solve_time = clock();
         if(proof_type == ProofType::SearchTree) {
@@ -197,7 +197,7 @@ public:
         return max_node.permutation;
     }
 
-    // Execute the search and optionally genrate the proof while doing so
+    // Execute the serach and optionally genrate the proof while doing so
     // Returns backjump level if there is one
     // Returns previous level if the whole subtree has been proven pruned
     // Returns current level if not every node has been proven pruned
@@ -789,7 +789,7 @@ public:
     }
 
     // Calculates the quotient graph invariant incrementally
-    // This procedure is used when moving down the search tree
+    // This procedure is used when moving down the serach tree
     HashType calculateQuotientInvariantIncrement() {
         if(stabilized.m_size == 0)
             return calculateMultisetQuotientInvariant();
@@ -890,7 +890,7 @@ public:
     }
 
     // Calculates the quotient graph invariant incrementally
-    // This procedure is used when moving up the search tree
+    // This procedure is used when moving up the serach tree
     void calculateQuotientInvariantDecrement() {
         if(stabilized.m_size == 0)
             return;
