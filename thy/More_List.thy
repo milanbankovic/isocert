@@ -6,7 +6,7 @@ text\<open>In this section we define some additional functions and prove some
 subsection \<open>Additions to the List library\<close>
 
 theory More_List
-  imports Main
+  imports Main "HOL-Library.Product_Lexorder"
 begin
 
 text \<open>@{text rev}\<close>
@@ -293,6 +293,35 @@ lemma sum_list_replicate [simp]:
   shows "sum_list (replicate n x) = n * x"
   by (induction n) auto
 
+lemma sum_list_nonempty_gt:
+  fixes xs :: "nat list"
+  assumes "x \<in> set xs" "x > 1" "\<forall> x \<in> set xs. x \<ge> 1"
+  shows "sum_list xs > List.length xs"
+proof-
+  obtain i where "i < List.length xs" "xs ! i = x"
+    by (meson assms(1) in_set_conv_nth)
+  then have "xs = (take i xs) @ [x] @ (drop (i + 1) xs)" (is "?l = ?l1 @ ?x @ ?l2")
+    using id_take_nth_drop by auto
+  then have "sum_list xs = sum_list ?l1 + sum_list [x] + sum_list ?l2"
+    by (metis append.assoc sum_list_append)
+  moreover
+  have "sum_list ?l1 \<ge> i"
+    using sum_list_mono[of "take i xs" "\<lambda> x. 1" "\<lambda> x. x"]
+    by (metis \<open>i < List.length xs\<close> assms(3) in_set_takeD lambda_one length_take less_or_eq_imp_le map_ident min.bounded_iff order_antisym_conv sum_list_const take_map)
+  moreover
+  have "sum_list ?l2 \<ge> List.length xs - 1 - i"
+    using sum_list_mono[of "drop (i + 1) xs" "\<lambda> x. 1" "\<lambda> x. x"]
+    by (metis assms(3) drop_drop in_set_dropD lambda_one length_drop map_ident sum_list_const)
+  moreover
+  have "sum_list ?x > 1"
+    using \<open>1 < x\<close>
+    by fastforce
+  ultimately
+  show ?thesis
+    using `i < List.length xs`
+    by auto
+qed
+
 text \<open>@{text insort}\<close>
 
 lemma insort_middle:
@@ -393,7 +422,7 @@ lemma sorted_hd:
   assumes "x \<in> set xs" "sorted xs"
   shows "hd xs \<le> x"
   using assms
-  by (metis empty_iff eq_iff hd_Cons_tl insert_iff list.set(1) list.set(2) sorted.simps(2))
+  by (metis dual_order.eq_iff empty_set equals0D list.exhaust_sel set_ConsD sorted_simps(2))
 
 lemma sorted_last_Max:
   assumes "sorted xs" "set xs \<noteq> {}"
@@ -413,7 +442,7 @@ lemma sorted_map_mono:
   assumes "sorted xs" "\<forall> x \<in> set xs. \<forall> y \<in> set xs. x \<le> y \<longrightarrow> f x \<le> f y" 
   shows "sorted (map f xs)"
   using assms
-  by (metis (no_types, lifting) sorted_map sorted_sorted_wrt sorted_wrt_mono_rel)
+  by (metis (no_types, lifting) sorted_map sorted_wrt_mono_rel)
 
 lemma sorted_map_rev:
   assumes "sorted xs"
@@ -704,6 +733,88 @@ next
     by (simp add: sorted_append)
 qed
 
+lemma concat_nonempty_singletons:
+  assumes "List.length (concat xs) = List.length xs" "\<forall> x \<in> set xs. x \<noteq> []" "x \<in> set xs"
+  shows "List.length x = 1"
+proof (rule ccontr)
+  assume "\<not> ?thesis"
+  then have "List.length x > 1"
+    using assms(2-3)
+    using antisym_conv3 by auto
+  moreover
+  have "\<forall> x \<in> set xs. List.length x \<ge> 1"
+    using assms(2)
+    by (simp add: Suc_leI)
+  ultimately
+  have "sum_list (map List.length xs) > List.length xs"
+    using sum_list_nonempty_gt[of "List.length x" "map List.length xs"] `x \<in> set xs`
+    by auto
+  then show False
+    using assms(1)
+    by (simp add: length_concat)
+qed
+
+
+definition concat_prefix_length :: "'a list list \<Rightarrow> nat \<Rightarrow> nat" where 
+  "concat_prefix_length xs n = sum_list (map length (take n xs))"
+
+lemma concat_prefix_length_Suc [simp]:
+  assumes "n < List.length xs"
+  shows "concat_prefix_length xs (n + 1) = concat_prefix_length xs n  + length (xs ! n)"
+proof-
+  have "take (n + 1) xs = take n xs @ [xs ! n]"
+    using assms
+    using take_Suc_conv_app_nth by auto
+  then show ?thesis
+    unfolding concat_prefix_length_def
+    by auto
+qed
+
+lemma concat_prefix_length_ub:
+  shows "concat_prefix_length xs n \<le> length (concat xs)"
+  unfolding concat_prefix_length_def
+  by (metis append_take_drop_id concat_append length_append length_concat linorder_not_less not_add_less1)
+
+lemma length_prefix_mono:
+  assumes "n1 \<le> n2"
+  shows "concat_prefix_length xs n1 \<le> concat_prefix_length xs n2"
+proof-
+  obtain ys where "take n2 xs = take n1 xs @ ys"
+    by (metis assms nat_le_iff_add take_add)
+  then have "sum_list (map List.length (take n2 xs)) = sum_list (map List.length (take n1 xs)) + sum_list (map List.length ys)"
+    by auto
+  moreover have "sum_list (map List.length ys) \<ge> 0"
+    by auto
+  ultimately show ?thesis
+    unfolding concat_prefix_length_def
+    by auto
+qed
+
+lemma concat_in_nth_list:
+  assumes "j < length xs" "k < length (xs ! j)"
+  assumes "x = (xs ! j ! k)" "i = concat_prefix_length xs j + k"
+  shows "(concat xs) ! i = x"
+proof-
+  let ?p = "take j xs"
+  let ?s = "drop (j+1) xs"
+  have "xs = ?p @ [xs ! j] @ ?s"
+    by (metis add.commute append_assoc append_take_drop_id assms(1) hd_drop_conv_nth plus_1_eq_Suc take_hd_drop)
+  then have "concat xs = concat ?p @ (xs ! j) @ concat ?s"
+    by (metis append.right_neutral concat.simps(1) concat.simps(2) concat_append)
+  moreover have "length (concat ?p) = sum_list (map length ?p)"
+    by (rule length_concat)
+  ultimately have "concat xs ! i = ((xs ! j) @ concat ?s) ! k"
+    using `i = concat_prefix_length xs j + k`
+    by (metis nth_append_length_plus concat_prefix_length_def)
+  also have "... = (xs ! j) ! k"
+    using `k < length (xs ! j)`
+    thm nth_append
+    by (simp add: nth_append)
+  finally show ?thesis
+    using `x = (xs ! j) ! k`
+    by simp
+qed
+
 text \<open>@{text positions}\<close>
 
 definition positions :: "bool list \<Rightarrow> nat list" where
@@ -761,6 +872,153 @@ proof-
   thus ?thesis
     using positions_sorted_list_of_set[of "of_positions n ps"]
     by simp
+qed
+
+
+definition max_by_prop :: "'a set \<Rightarrow> ('a \<Rightarrow> 'b::linorder) \<Rightarrow> 'a set" where 
+  "max_by_prop A f = (
+    let max = Max (f ` A)
+     in {x \<in> A. f x = max}
+  )"
+
+lemma max_by_prop_nonempty [simp]:
+  assumes "finite A" "A \<noteq> {}"
+  shows "max_by_prop A f \<noteq> {}"
+  using assms Max_in[of "f ` A"]
+  unfolding max_by_prop_def Let_def
+  by fastforce
+
+lemma max_by_prop_finite [simp]:
+  assumes "finite A" 
+  shows "finite (max_by_prop A f)"
+  using assms
+  unfolding max_by_prop_def Let_def
+  by auto
+
+lemma max_by_prop_subseteq:
+  shows "max_by_prop A f \<subseteq> A"
+  unfolding max_by_prop_def
+  by auto
+
+lemma max_by_prop_max_prop:
+  assumes "finite A" "x \<in> max_by_prop A f" "x' \<in> A"
+  shows "f x \<ge> f x'"
+  using assms
+  unfolding max_by_prop_def Let_def
+  by simp
+
+lemma max_by_prop_max_prop_eq:
+  assumes "finite A" "x \<in> max_by_prop A f" "x' \<in> max_by_prop A f"
+  shows "f x = f x'"
+  using assms
+  unfolding max_by_prop_def Let_def
+  by simp
+
+lemma max_by_prop_max_prop_gt:
+  assumes "finite A" "x \<in> max_by_prop A f" "x' \<in> A" "x' \<notin> max_by_prop A f"
+  shows "f x > f x'"
+  using assms
+  unfolding max_by_prop_def Let_def
+  by (simp add: order_less_le)
+
+lemma max_by_prop_iff:
+  assumes "finite A" "A \<noteq> {}"
+  shows "x \<in> max_by_prop A f \<longleftrightarrow> x \<in> A \<and> (\<forall> x' \<in> A. f x' \<le> f x)"
+  unfolding max_by_prop_def Let_def
+  by (smt (verit, best) Max.coboundedI Max_in assms(1) assms(2) finite_has_maximal2 finite_imageI imageE image_eqI image_is_empty mem_Collect_eq)
+
+
+lemma max_by_prop_pair:
+  assumes "finite A" "A \<noteq> {}"
+  shows "max_by_prop (max_by_prop A f1) f2 = max_by_prop A (\<lambda> x. (f1 x, f2 x))" (is "?lhs = ?rhs")
+proof-
+  have "\<forall> x. x \<in> ?lhs \<longleftrightarrow> x \<in> ?rhs"
+  proof
+    fix x
+    have "x \<in> ?lhs \<longleftrightarrow> x \<in> max_by_prop A f1 \<and> (\<forall> x' \<in> max_by_prop A f1. f2 x \<ge> f2 x')"
+      using assms max_by_prop_iff
+      by (metis max_by_prop_finite max_by_prop_nonempty)
+    also have "... \<longleftrightarrow> x \<in> A \<and> (\<forall> x' \<in> A. f1 x' \<le> f1 x) \<and> (\<forall> x' \<in> A. (\<forall> x'' \<in> A. f1 x'' \<le> f1 x') \<longrightarrow> f2 x \<ge> f2 x')"
+      using assms max_by_prop_iff
+      by metis
+    also have "... \<longleftrightarrow> x \<in> ?rhs"
+      by (subst max_by_prop_iff[OF assms]) (force simp add: less_eq_prod_def nless_le)
+    finally show "x \<in> ?lhs \<longleftrightarrow> x \<in> ?rhs"
+      .
+  qed
+  then show ?thesis
+    by blast
+qed
+
+lemma max_by_prop_cong:
+  assumes "finite A" "A \<noteq> {}"
+  assumes "\<forall> x1 \<in> A. \<forall> x2 \<in> A. f1 x1 < f1 x2 \<longleftrightarrow> f2 x1 < f2 x2"
+  shows "max_by_prop A f1 = max_by_prop A f2"
+  using assms
+  unfolding max_by_prop_def
+  by (smt (verit, ccfv_SIG) Collect_cong Max_ge Max_in finite_imageI imageE image_eqI image_is_empty linorder_not_less not_less_iff_gr_or_eq) 
+
+
+definition split_by_prop :: "'a set => ('a => 'b) => 'a set set" where
+  "split_by_prop A f = { {y \<in> A. f y = x} | x. x \<in> f ` A}" 
+
+lemma split_by_prop_finite [simp]:
+  assumes "finite A"
+  shows "finite (split_by_prop A f)"
+  unfolding split_by_prop_def
+  using assms
+  by auto
+
+lemma split_by_prop_nonempty [simp]:
+  shows "{} \<notin> split_by_prop A f"
+  unfolding split_by_prop_def
+  by auto
+
+lemma split_by_prop_set [simp]:
+  shows "\<Union> (split_by_prop A f) = A"
+  unfolding split_by_prop_def
+  by auto
+
+lemma split_by_prop_disjoint:
+  assumes "x \<in> split_by_prop A f" "y \<in> split_by_prop A f"
+  shows "x = y \<or> x \<inter> y = {}"
+  using assms
+  unfolding split_by_prop_def
+  by auto
+
+definition is_split_by_prop where
+  "is_split_by_prop cs f \<longleftrightarrow> 
+    (\<forall> cl \<in> cs. \<forall> v1 \<in> cl. \<forall> v2 \<in> cl. f v1 = f v2) \<and> 
+    (\<forall> cl1 \<in> cs. \<forall> cl2 \<in> cs. cl1 \<noteq> cl2  \<longrightarrow> (\<forall> v1 \<in> cl1. \<forall> v2 \<in> cl2. f v1 \<noteq> f v2)) \<and>
+    (\<forall> cl \<in> cs. cl \<noteq> {})"
+
+lemma split_by_prop_is_split_by_prop [simp]:
+  shows "is_split_by_prop (split_by_prop A f) f"
+  unfolding is_split_by_prop_def split_by_prop_def
+  by auto
+
+lemma split_by_prop_singleton:
+  assumes "A \<noteq> {}"
+  shows "split_by_prop A f = {A} \<longleftrightarrow> (\<forall> x \<in> A. \<forall> y \<in> A. f x = f y)"
+proof
+  assume "split_by_prop A f = {A}"
+  then show "\<forall> x \<in> A. \<forall> y \<in> A. f x = f y"
+    by (metis is_split_by_prop_def singletonI split_by_prop_is_split_by_prop)
+next
+  assume *: "\<forall> x \<in> A. \<forall> y \<in> A. f x = f y"
+  from assms obtain x where "x \<in> A"
+    by auto
+  then have "\<forall> x' \<in> A. f x' = f x"
+    using *
+    by blast
+  then have "f ` A = {f x}"
+    using \<open>x \<in> A\<close> by blast
+  then have "{{y \<in> A. f y = x} |x. x \<in> f ` A} = {{y \<in> A. f y = f x}}"
+    by auto
+  then show "split_by_prop A f = {A}"
+    unfolding split_by_prop_def
+    using *
+    by blast
 qed
 
 end

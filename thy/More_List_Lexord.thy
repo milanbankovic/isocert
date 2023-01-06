@@ -221,7 +221,7 @@ proof
       by (auto simp add: set_zip nth_rev)
     ultimately
     show ?thesis
-      by (metis (no_types, hide_lams) Cons_less_Cons One_nat_def add.commute add.right_neutral add_Suc_right list.set_intros(1) max_list.cases)
+      by (metis (no_types, opaque_lifting) Cons_less_Cons One_nat_def add.commute add.right_neutral Cons_less_Cons One_nat_def add.commute add.right_neutral add_Suc_right list.set_intros(1) max_list.cases)
   qed
   ultimately
   show ?rhs

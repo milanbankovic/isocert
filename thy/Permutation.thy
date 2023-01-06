@@ -1,5 +1,5 @@
 theory Permutation
-imports Main "HOL-Library.FSet" MoreList
+imports Main "HOL-Library.FSet" More_List
 begin
 
 text \<open>Permutation type\<close>
@@ -24,6 +24,12 @@ lift_definition perm_dom :: "perm \<Rightarrow> nat" is
 lemma perm_list_set [simp]:
   shows "set (perm_list p) = {0..<perm_dom p}"
   by transfer simp
+
+
+lemma length_perm_list[simp]:
+  shows "length (perm_list p) = perm_dom p"
+  by transfer simp
+
 
 text \<open>Permutation as a function that acts on {0..<n}\<close>
 
@@ -110,6 +116,12 @@ lemma inv_perm_fun_perm_fun:
   unfolding is_perm_fun_def bij_betw_def
   by (smt (z3) assms atLeastLessThan_iff f_the_inv_into_f image_cong image_iff inj_on_cong inj_on_the_inv_into inv_perm_fun the_inv_into_onto)
 
+lemma perm_list_nth:
+  assumes "i < perm_dom p"
+  shows "perm_list p ! i = perm_fun p i"
+  using assms
+  by transfer (simp add: perm_fun'_def)
+
 text \<open>Each bijective function gives rise to a permutation\<close>
 
 definition make_perm' :: "nat \<Rightarrow> (nat \<Rightarrow> nat) \<Rightarrow> nat list" where
@@ -157,6 +169,10 @@ definition perm_id' :: "nat \<Rightarrow> nat list" where
 lift_definition perm_id :: "nat \<Rightarrow> perm" is perm_id'
   by (simp add: perm_id'_def)
 
+lemma perm_dom_perm_id [simp]:
+  shows "perm_dom (perm_id n) = n"
+  by transfer (simp add: perm_id'_def)
+
 lemma perm_fun_perm_id [simp]:
   assumes "x < n"
   shows "perm_fun (perm_id n) x = x"
@@ -167,21 +183,22 @@ lemma perm_fun_perm_id [simp]:
 definition perm_inv' :: "nat list \<Rightarrow> nat list" where
   "perm_inv' p = map (index_of p) [0..<length p]"
 
-lift_definition perm_inv :: "perm \<Rightarrow> perm" is perm_inv'
-proof-
-  fix xs
-  assume *: "set xs = {0..<length xs}"
-  show "set (perm_inv' xs) = {0..<length (perm_inv' xs)}" (is "?lhs = ?rhs")
-  proof
+lemma set_perm_inv':
+  assumes "set xs = {0..<length xs}"
+  shows "set (perm_inv' xs) = {0..<length (perm_inv' xs)}" (is "?lhs = ?rhs")
+proof
     show "?lhs \<subseteq> ?rhs"
-      using * index_of_in_set[of _ xs]
+      using assms index_of_in_set[of _ xs]
       by (auto simp add: perm_inv'_def)
-  next
+next
     show "?rhs \<subseteq> ?lhs"
-      using *
+      using assms
       by (smt (verit, ccfv_SIG) atLeastLessThan_iff distinct_perm image_iff index_of_in_set length_map map_nth nth_eq_iff_index_eq nth_mem perm_inv'_def set_map set_upt subsetI)
-  qed
 qed
+
+lift_definition perm_inv :: "perm \<Rightarrow> perm" is perm_inv'
+  using set_perm_inv'
+  by auto
 
 lemma perm_dom_perm_inv [simp]:
   "perm_dom (perm_inv p) = perm_dom p"
@@ -210,6 +227,7 @@ qed
 lemma perm_inv_perm_id [simp]:
   shows "perm_inv (perm_id n) = perm_id n"
   by (smt (verit, ccfv_SIG) atLeast0LessThan diff_zero index_of_in_set length_upt lessThan_iff nth_map permEqI perm_dom.rep_eq perm_dom_perm_inv perm_fun'_def perm_fun.rep_eq perm_fun_perm_id perm_id'_def perm_id.rep_eq perm_inv'_def perm_inv.rep_eq perm_list_set)
+
 
 lemma perm_fun_perm_inv_range:
   assumes "perm_dom p = n"
@@ -274,6 +292,35 @@ proof transfer
     by (auto simp add: make_perm'_def inv_perm_fun_perm_fun perm_inv'_def)
 qed
 
+definition inv_n :: "nat => (nat => nat) => (nat => nat)" where
+  "inv_n n f x = (if x < n then (THE y. y < n \<and> f y = x) else undefined)"
+
+lemma bij_betw_ex1:
+  fixes f :: "nat => nat"
+  assumes "bij_betw f {0..<n} {0..<n}"
+  shows "\<forall> y < n. \<exists>! x. x < n \<and> f x = y"
+  using assms
+  unfolding bij_betw_def inj_on_def
+  by (smt (verit, ccfv_threshold) atLeastLessThan_iff image_iff zero_le)
+  
+lemma inv_n_comp:
+  assumes "bij_betw f {0..<n} {0..<n}" "x < n"
+  shows "(inv_n n f) (f x) = x"
+  using assms
+  using atLeast0LessThan bij_betw_apply inv_n_def inv_perm_fun inv_perm_fun_def is_perm_fun_def 
+  by fastforce
+
+lemma comp_inv_n:
+  assumes "bij_betw f {0..<n} {0..<n}" "x < n"
+  shows "f (inv_n n f x) = x"
+  using assms
+  by (metis bij_betw_ex1 inv_n_comp)
+
+lemma perm_fun_inv:
+  assumes "x < perm_dom p"
+  shows "perm_fun (perm_inv p) x = (inv_n (perm_dom p) (perm_fun p)) x"
+  using assms
+  by (metis inv_n_comp is_perm_fun is_perm_fun_def perm_fun_perm_inv1 perm_fun_perm_inv_range)
 
 definition perm_comp' :: "nat list \<Rightarrow> nat list \<Rightarrow> nat list" where
   "perm_comp' p1 p2 = 
@@ -307,7 +354,13 @@ qed
 lemma perm_comp_assoc:
   assumes "perm_dom p1 = n" "perm_dom p2 = n" "perm_dom p3 = n"
   shows "perm_comp (perm_comp p1 p2) p3 = perm_comp p1 (perm_comp p2 p3)"
-  sorry
+  using assms
+proof transfer
+  fix p1 p2 p3
+  assume *: "set p1 = {0..<length p1}" "set p2 = {0..<length p2}" "set p3 = {0..<length p3}"
+  then show "perm_comp' (perm_comp' p1 p2) p3 = perm_comp' p1 (perm_comp' p2 p3)" 
+    unfolding perm_comp'_def perm_fun'_def  by auto
+qed
 
 lemma perm_comp_make_perm [simp]:
   assumes "is_perm_fun n p1" "is_perm_fun n p2" 
@@ -379,7 +432,12 @@ lemma perm_inv_solve:
   assumes "perm_dom p1 = n" "perm_dom p2 = n"  "perm_comp p1 p2 = perm_id n"
   shows "p1 = perm_inv p2"
   using assms
-  sorry
+proof transfer
+  fix p1 n p2
+  assume "set p1 = {0..<length p1}" "length p1 = n" "set p2 = {0..<length p2}" "length p2 = n" "perm_comp' p1 p2 = perm_id' n"
+  then show "p1 = perm_inv' p2"
+    by (smt (verit, best) Quotient_perm Quotient_rep_abs_eq eq_onp_le_eq eq_onp_same_args perm_comp.abs_eq perm_comp_assoc perm_comp_perm_id_1 perm_comp_perm_id_2 perm_comp_perm_inv2 perm_dom.abs_eq perm_dom_perm_inv perm_id.abs_eq perm_inv.rep_eq)
+qed   
 
 lemma perm_inv_perm_comp [simp]:
   assumes "perm_dom p1 = n" "perm_dom p2 = n"
@@ -399,6 +457,12 @@ lemma perm_fun_pair [simp]:
   unfolding perm_fun_pair_def
   by auto
 
+lemma perm_fun_perm_fun_pair [simp]:
+  assumes "\<forall> v < n. perm_fun p1 v = perm_fun p2 v" "x < n" "y < n"
+  shows "perm_fun_pair p1 (x, y) = perm_fun_pair p2 (x, y)"
+  using assms
+  by (simp add: perm_fun_pair_def)
+  
 definition perm_fun_list_f :: "(nat \<Rightarrow> nat) \<Rightarrow> nat list \<Rightarrow> nat list" where
   "perm_fun_list_f p xs = map p xs"
 
@@ -425,6 +489,15 @@ lemma perm_fun_list_Cons [simp]:
   shows "perm_fun_list p (x # xs) = (perm_fun p x) # perm_fun_list p xs"
   by (simp add: perm_fun_list_def)
 
+lemma perm_fun_list_snoc [simp]: 
+  shows "perm_fun_list p (V @ [v']) = perm_fun_list p V @ [perm_fun p v']"
+  by (simp add: perm_fun_list_def)
+
+lemma rev_perm_fun_list [simp]:
+  shows "rev (perm_fun_list p xs) = perm_fun_list p (rev xs)"
+  unfolding perm_fun_list_def
+  by (auto simp add: rev_map)
+
 lemma perm_fun_set_Empty [simp]:
   shows "perm_fun_set p {} = {}"
   by (simp add: perm_fun_set_def)
@@ -432,6 +505,23 @@ lemma perm_fun_set_Empty [simp]:
 lemma perm_fun_fset_Empty [simp]:
   shows "perm_fun_fset p {||} = {||}"
   by (simp add: perm_fun_fset_def)
+
+lemma perm_fun_set_finite [simp]:
+  assumes "finite A"
+  shows "finite (perm_fun_set p A)"
+  using assms
+  unfolding perm_fun_set_def
+  by auto
+
+lemma perm_fun_set_card [simp]:
+  assumes "A \<subseteq> {0..<perm_dom p}"
+  shows "card (perm_fun_set p A) = card A"
+  unfolding perm_fun_set_def
+proof (rule card_image)
+  show "inj_on (perm_fun p) A"
+    using assms
+    by (meson bij_betw_def inj_on_subset is_perm_fun is_perm_fun_def)
+qed
 
 lemma perm_fun_pair_perm_id [simp]:
   assumes "x < n" "y < n"
@@ -486,5 +576,70 @@ lemma perm_fun_list_perm_inv [simp]:
   shows "perm_fun_list (perm_inv p) (perm_fun_list p xs) = xs"
   using assms
   by (metis perm_comp_perm_inv1 perm_dom_perm_inv perm_fun_list_perm_comp perm_fun_list_perm_id)
+
+
+definition perm_reorder where
+  "perm_reorder p xs = map (\<lambda> i. (xs ! perm_fun (perm_inv p) i)) [0..<length xs]"
+
+lemma length_perm_reorder [simp]:
+  "length (perm_reorder p xs) = length xs"
+  by (simp add: perm_reorder_def)
+
+
+lemma perm_reorder:
+  assumes "length xs = perm_dom p"
+  shows "perm_reorder p xs = map ((!) xs) (perm_list (perm_inv p))"
+proof (subst list_eq_iff_nth_eq, safe)
+  show "length (perm_reorder p xs) = length (map ((!) xs) (perm_list (perm_inv p)))"
+    by (simp add: perm_reorder_def assms)
+next
+  fix i
+  assume *: "i < length (perm_reorder p xs)"
+  have "map ((!) xs) (perm_list (perm_inv p)) ! i = xs ! (perm_list (perm_inv p) ! i)"
+  proof (rule nth_map)
+    show "i < length (perm_list (perm_inv p))"
+      using * assms
+      by simp
+  qed
+    
+  then show "perm_reorder p xs ! i = map ((!) xs) (perm_list (perm_inv p)) ! i"
+    using * assms
+    unfolding perm_reorder_def
+    by (simp add: perm_list_nth)
+qed
+
+lemma perm_reorder_nth [simp]:
+  assumes "i < length xs"
+  shows "perm_reorder p xs ! i = xs ! perm_fun (perm_inv p) i"
+  using assms
+  unfolding perm_reorder_def
+  by simp
+
+lemma set_perm_reorder:
+  assumes "perm_dom p = length xs"
+  shows "set (perm_reorder p xs) = set xs"
+  using assms
+  by (metis list.set_map map_nth perm_dom_perm_inv perm_list_set perm_reorder set_upt)
+
+lemma perm_reorder_comp [simp]:
+  assumes "perm_dom p1 = length xs" "perm_dom p2 = length xs"
+  shows "perm_reorder p1 (perm_reorder p2 xs) = perm_reorder (perm_comp p1 p2) xs"
+  using assms
+  unfolding perm_reorder_def
+  by (simp add: perm_fun_perm_inv_range)
+
+lemma perm_reorder_id [simp]:
+  assumes "n = length xs"
+  shows "perm_reorder (perm_id n) xs = xs"
+  unfolding perm_reorder_def
+  by (simp add: assms map_upt_eqI)
+
+lemma perm_reorder_inj:
+  assumes "length xs = perm_dom p" "length xs = perm_dom p" 
+          "perm_reorder p xs = perm_reorder p ys"
+  shows "xs = ys"
+  using assms
+  unfolding perm_reorder_def
+  by (metis (no_types, lifting) assms(3) length_perm_reorder nth_equalityI perm_comp_perm_inv2 perm_dom_perm_inv perm_fun_perm_inv2 perm_fun_perm_inv_range perm_inv_solve perm_reorder_nth)
 
 end
